@@ -25,7 +25,7 @@ def is_valid_path(file_path):
         raise Exception("File is not a csv file")
 
 
-def plot_confusion_matrix(houses, house_predictions, labels):
+def plot_confusion_matrix(houses, house_predictions, labels, title="Confusion Matrix"):
     cm = confusion_matrix(houses, house_predictions)
     plt.figure(figsize=(10, 7))
     sns.heatmap(
@@ -33,7 +33,7 @@ def plot_confusion_matrix(houses, house_predictions, labels):
     )
     plt.xlabel("Predicted")
     plt.ylabel("Actual")
-    plt.title("Confusion Matrix")
+    plt.title(title)
     plt.show()
 
 
