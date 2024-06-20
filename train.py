@@ -4,20 +4,35 @@ import ml_tools as ml
 import numpy as np
 
 LEARNING_RATE = 0.1
-EPOCHS = 10000
+EPOCHS = 100
 EPSILON = 1e-15
 
 
-def init(df):
-    slopes = np.random.rand(df.shape[1])
-    intercept = np.random.rand(1)
-    return slopes, intercept
+def init(dimensions):
+    parametres = {}
+    layer_len = len(dimensions)
+
+    for layer in range(1, layer_len):
+        parametres["slope_" + str(layer)] = np.random.rand(
+            dimensions[layer], dimensions[layer - 1]
+        )
+        parametres["intercept_" + str(layer)] = np.random.rand(dimensions[layer], 1)
+    return parametres
 
 
-def model(slopes, intercept, x):
-    Z = np.dot(x, slopes) + intercept
-    A = 1 / (1 + np.exp(-Z))
-    return A
+def forward_propagation(X, parametres):
+    activations = {"Activation_0": X}
+    layer_len = len(parametres) // 2
+    for layer in range(1, layer_len + 1):
+        layer_slope = parametres["slope_" + str(layer)]
+        layer_intercept = parametres["intercept_" + str(layer)]
+        prev_layer_activation = activations["Activation_" + str(layer - 1)]
+
+        Z = np.dot(layer_slope, prev_layer_activation) + layer_intercept
+        curr_layer_activation = 1 / (1 + np.exp(-Z))
+        activations["Activation_" + str(layer)] = curr_layer_activation
+
+    return activations
 
 
 def log_loss(A, y):
@@ -28,16 +43,42 @@ def log_loss(A, y):
     )
 
 
+def back_propagation(activations, y, parametres):
+    layer_len = len(parametres) // 2
+    m = y.shape[1]
+
+    dZ = activations["Activation_" + str(layer_len)] - y
+    gradients = {}
+    for layer in reversed(range(1, layer_len + 1)):
+        prev_activation = activations["Activation_" + str(layer - 1)]
+        curr_slope = parametres["slope_" + str(layer)]
+        gradients["d_slopes_" + str(layer)] = 1 / m * np.dot(dZ, prev_activation.T)
+        gradients["d_intercept_" + str(layer)] = (
+            1 / m * np.sum(dZ, axis=1, keepdims=True)
+        )
+        if layer > 1:
+            dZ = np.dot(curr_slope.T, dZ) * (prev_activation * (1 - prev_activation))
+    return gradients
+
+
 def gradients(A, X, y):
     dW = 1 / len(y) * np.dot(X.T, (A - y))
     db = 1 / len(y) * np.sum(A - y)
     return dW, db
 
 
-def update(slopes, intercept, dW, db):
-    slopes = slopes - LEARNING_RATE * dW
-    intercept = intercept - LEARNING_RATE * db
-    return slopes, intercept
+def update(gradients, parametres):
+    layer_len = len(parametres) // 2
+    for layer in range(1, layer_len + 1):
+        parametres["slope_" + str(layer)] = (
+            parametres["slope_" + str(layer)]
+            - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
+        )
+        parametres["intercept_" + str(layer)] = (
+            parametres["intercept_" + str(layer)]
+            - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
+        )
+    return parametres
 
 
 def print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy):
@@ -75,31 +116,48 @@ def compute_accuracy(A, y):
     return np.sum(predictions == y) / len(y)
 
 
-def train_model(slopes, intercept, x, y, validation_df, validation_y):
+def train_model(X, y, hidden_layer, validation_df, validation_y):
+    dimensions = list(hidden_layer)
+    dimensions.insert(0, X.shape[0])
+    dimensions.append(y.shape[0])
+    parametres = init(dimensions)
     loss_history = []
     val_loss_history = []
     accuracy = []
     val_accuracy = []
+    activations = forward_propagation(X, parametres)
+    gradients = back_propagation(activations, y, parametres)
     for i in range(EPOCHS):
-        A = model(slopes, intercept, x)
-        A_val = model(slopes, intercept, validation_df)
-        loss_history.append(log_loss(A, y))
-        val_loss_history.append(log_loss(A_val, validation_y))
-        accuracy.append(compute_accuracy(A, y))
-        val_accuracy.append(compute_accuracy(A_val, validation_y))
-        dW, db = gradients(A, x, y)
-        slopes, intercept = update(slopes, intercept, dW, db)
-        if i % 1000 == 0:
-            print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
+        activation = forward_propagation(X, parametres)
+        # A_val = forward_propagation(slopes, intercept, validation_df)
+        gradients = back_propagation(activation, y, parametres)
+        parametres = update(gradients, parametres)
+        if i % 10 == 0:
+            layer_len = len(parametres) // 2
+            loss = log_loss(activation["Activation_" + str(layer_len)], y)
+            print(loss, i, "loss")
+            loss_history.append(log_loss(activation["Activation_" + str(layer_len)], y))
+            acc = compute_accuracy(activation["Activation_" + str(layer_len)], y)
+            print(acc, i, "acc")
+            accuracy.append(
+                compute_accuracy(activation["Activation_" + str(layer_len)], y)
+            )
+        # loss_history.append(log_loss(y, y))
+        # val_loss_history.append(log_loss(A_val, validation_y))
+        # val_accuracy.append(compute_accuracy(A_val, validation_y))
+        # dW, db = gradients(A, X, y)
+        # slopes, intercept = update(slopes, intercept, dW, db)
+        # if i % 1000 == 0:
+        #     print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
     display_progress(loss_history, val_loss_history, accuracy, val_accuracy)
     return slopes, intercept
 
 
 def display_predictions(x, y, slopes, intercept, validation_df, validation_y):
-    predictions = model(slopes, intercept, x)
+    predictions = forward_propagation(slopes, intercept, x)
     predictions = np.where(predictions > 0.5, 1, 0)
     ml.plot_confusion_matrix(y, predictions, ["B", "M"], title="Train Confusion Matrix")
-    val_predictions = model(slopes, intercept, validation_df)
+    val_predictions = forward_propagation(slopes, intercept, validation_df)
     val_predictions = np.where(val_predictions > 0.5, 1, 0)
     ml.plot_confusion_matrix(
         validation_y, val_predictions, ["B", "M"], title="Validation Confusion Matrix"
@@ -123,17 +181,16 @@ if __name__ == "__main__":
         df = ml.load_csv(args.train)
         validation_df = ml.load_csv(args.validation)
         validation_y = validation_df.pop("Diagnosis")
-        validation_y = diagnosis_to_numeric(validation_y)
+        validation_y = np.array(diagnosis_to_numeric(validation_y), ndmin=2)
         validation_df = ml.normalize_df(validation_df)
         y = df.pop("Diagnosis")
-        y = diagnosis_to_numeric(y)
+        y = np.array(diagnosis_to_numeric(y), ndmin=2)
         df = ml.normalize_df(df)
     except Exception as e:
         print(e)
         exit(1)
-    slopes, intercept = init(df)
-    slopes, intercept = train_model(
-        slopes, intercept, df, y, validation_df, validation_y
-    )
+    df = df.T
+    hidden_layers = [32, 32, 32]
+    slopes, intercept = train_model(df, y, hidden_layers, validation_df, validation_y)
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
