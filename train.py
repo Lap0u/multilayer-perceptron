@@ -3,20 +3,21 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.1
-EPOCHS = 100
+LEARNING_RATE = 0.02
+EPOCHS = 10000
 EPSILON = 1e-15
 
 
 def init(dimensions):
     parametres = {}
     layer_len = len(dimensions)
+    np.random.seed(1)
 
     for layer in range(1, layer_len):
-        parametres["slope_" + str(layer)] = np.random.rand(
+        parametres["slope_" + str(layer)] = np.random.randn(
             dimensions[layer], dimensions[layer - 1]
         )
-        parametres["intercept_" + str(layer)] = np.random.rand(dimensions[layer], 1)
+        parametres["intercept_" + str(layer)] = np.random.randn(dimensions[layer], 1)
     return parametres
 
 
@@ -99,10 +100,10 @@ def display_progress(loss_history, val_loss_history, accuracy, val_accuracy):
     plt.plot(val_loss_history)
     plt.plot(accuracy)
     plt.plot(val_accuracy)
-    plt.xscale("log")
+    # plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.ylim(0, 1.2)
+    # plt.ylim(0, 1.2)
     plt.xlim(1, EPOCHS)
     plt.title("Loss and Accuracy vs Epoch")
     plt.legend(
@@ -129,26 +130,31 @@ def train_model(X, y, hidden_layer, validation_df, validation_y):
     gradients = back_propagation(activations, y, parametres)
     for i in range(EPOCHS):
         activation = forward_propagation(X, parametres)
-        # A_val = forward_propagation(slopes, intercept, validation_df)
+        A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, y, parametres)
         parametres = update(gradients, parametres)
-        if i % 10 == 0:
-            layer_len = len(parametres) // 2
-            loss = log_loss(activation["Activation_" + str(layer_len)], y)
-            print(loss, i, "loss")
-            loss_history.append(log_loss(activation["Activation_" + str(layer_len)], y))
-            acc = compute_accuracy(activation["Activation_" + str(layer_len)], y)
-            print(acc, i, "acc")
-            accuracy.append(
-                compute_accuracy(activation["Activation_" + str(layer_len)], y)
-            )
-        # loss_history.append(log_loss(y, y))
-        # val_loss_history.append(log_loss(A_val, validation_y))
-        # val_accuracy.append(compute_accuracy(A_val, validation_y))
-        # dW, db = gradients(A, X, y)
-        # slopes, intercept = update(slopes, intercept, dW, db)
-        # if i % 1000 == 0:
-        #     print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
+        # if i % 10 == 0:
+        layer_len = len(parametres) // 2
+        loss = log_loss(
+            activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+        )
+        val_loss = log_loss(
+            A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+        )
+        # print(loss, i, "loss")
+        loss_history.append(loss)
+        val_loss_history.append(val_loss)
+        acc = compute_accuracy(
+            activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+        )
+        # print(acc, i, "acc")
+        val_acc = compute_accuracy(
+            A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+        )
+        accuracy.append(acc)
+        val_accuracy.append(val_acc)
+        if i % 100 == 0:
+            print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
     display_progress(loss_history, val_loss_history, accuracy, val_accuracy)
     return slopes, intercept
 
@@ -183,14 +189,18 @@ if __name__ == "__main__":
         validation_y = validation_df.pop("Diagnosis")
         validation_y = np.array(diagnosis_to_numeric(validation_y), ndmin=2)
         validation_df = ml.normalize_df(validation_df)
+        df.drop("ID", axis=1, inplace=True)
+        validation_df.drop("ID", axis=1, inplace=True)
         y = df.pop("Diagnosis")
         y = np.array(diagnosis_to_numeric(y), ndmin=2)
         df = ml.normalize_df(df)
+        print(df)
     except Exception as e:
         print(e)
         exit(1)
     df = df.T
-    hidden_layers = [32, 32, 32]
+    validation_df = validation_df.T
+    hidden_layers = [24, 24, 24]
     slopes, intercept = train_model(df, y, hidden_layers, validation_df, validation_y)
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
