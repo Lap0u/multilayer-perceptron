@@ -3,7 +3,7 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.02
+LEARNING_RATE = 0.1
 EPOCHS = 10000
 EPSILON = 1e-15
 
@@ -38,9 +38,9 @@ def forward_propagation(X, parametres):
 
 def log_loss(A, y):
     return (
-        1
+        -1
         / len(y)
-        * np.sum(-y * np.log(A + EPSILON) - (1 - y) * np.log(1 - A + EPSILON))
+        * np.sum(y * np.log(A + EPSILON) + (1 - y) * np.log(1 - A + EPSILON))
     )
 
 
@@ -100,10 +100,10 @@ def display_progress(loss_history, val_loss_history, accuracy, val_accuracy):
     plt.plot(val_loss_history)
     plt.plot(accuracy)
     plt.plot(val_accuracy)
-    # plt.xscale("log")
+    plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    # plt.ylim(0, 1.2)
+    plt.ylim(0, 1.2)
     plt.xlim(1, EPOCHS)
     plt.title("Loss and Accuracy vs Epoch")
     plt.legend(
@@ -133,7 +133,6 @@ def train_model(X, y, hidden_layer, validation_df, validation_y):
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, y, parametres)
         parametres = update(gradients, parametres)
-        # if i % 10 == 0:
         layer_len = len(parametres) // 2
         loss = log_loss(
             activation["Activation_" + str(layer_len)].flatten(), y.flatten()
@@ -141,7 +140,6 @@ def train_model(X, y, hidden_layer, validation_df, validation_y):
         val_loss = log_loss(
             A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
         )
-        # print(loss, i, "loss")
         loss_history.append(loss)
         val_loss_history.append(val_loss)
         acc = compute_accuracy(
@@ -153,7 +151,7 @@ def train_model(X, y, hidden_layer, validation_df, validation_y):
         )
         accuracy.append(acc)
         val_accuracy.append(val_acc)
-        if i % 100 == 0:
+        if i % 10 == 0:
             print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
     display_progress(loss_history, val_loss_history, accuracy, val_accuracy)
     return slopes, intercept
