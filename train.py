@@ -4,7 +4,7 @@ import ml_tools as ml
 import numpy as np
 
 LEARNING_RATE = 0.1
-EPOCHS = 10000
+EPOCHS = 1700
 EPSILON = 1e-15
 
 
@@ -62,12 +62,6 @@ def back_propagation(activations, y, parametres):
     return gradients
 
 
-def gradients(A, X, y):
-    dW = 1 / len(y) * np.dot(X.T, (A - y))
-    db = 1 / len(y) * np.sum(A - y)
-    return dW, db
-
-
 def update(gradients, parametres):
     layer_len = len(parametres) // 2
     for layer in range(1, layer_len + 1):
@@ -82,12 +76,33 @@ def update(gradients, parametres):
     return parametres
 
 
-def print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy):
+def print_metrics(
+    i,
+    loss_history,
+    val_loss_history,
+    accuracy,
+    val_accuracy,
+    recall_history,
+    val_recall_history,
+    precision_history,
+    val_precision_history,
+    f1_history,
+    val_f1_history,
+):
     print(f"Epoch: {i}")
     print(f"Train Loss: {loss_history[i]:.3f}")
     print(f"Validation Loss: {val_loss_history[i]:.3f}")
     print(f"Train Accuracy: {accuracy[i]:.3f}")
     print(f"Validation Accuracy: {val_accuracy[i]:.3f}")
+    if recall_history:
+        print(f"Train Recall: {recall_history[i]:.3f}")
+        print(f"Validation Recall: {val_recall_history[i]:.3f}")
+    if precision_history:
+        print(f"Train Precision: {precision_history[i]:.3f}")
+        print(f"Validation Precision: {val_precision_history[i]:.3f}")
+    if f1_history:
+        print(f"Train F1: {f1_history[i]:.3f}")
+        print(f"Validation F1: {val_f1_history[i]:.3f}")
     print()
 
 
@@ -112,20 +127,164 @@ def display_progress(loss_history, val_loss_history, accuracy, val_accuracy):
     plt.show()
 
 
+def plot_precision(precision_history, val_precision_history):
+    plt.plot(precision_history)
+    plt.plot(val_precision_history)
+    plt.xscale("log")
+    plt.xlabel("Epoch")
+    plt.ylabel("Precision")
+    plt.ylim(0, 1.2)
+    plt.xlim(1, EPOCHS)
+    plt.title("Precision vs Epoch")
+    plt.legend(["Train Precision", "Validation Precision"])
+    plt.show()
+
+
+def plot_recall(recall_history, val_recall_history):
+    plt.plot(recall_history)
+    plt.plot(val_recall_history)
+    plt.xscale("log")
+    plt.xlabel("Epoch")
+    plt.ylabel("Recall")
+    plt.ylim(0, 1.2)
+    plt.xlim(1, EPOCHS)
+    plt.title("Recall vs Epoch")
+    plt.legend(["Train Recall", "Validation Recall"])
+    plt.show()
+
+
 def compute_accuracy(A, y):
     predictions = np.where(A > 0.5, 1, 0)
     return np.sum(predictions == y) / len(y)
 
 
-def train_model(X, y, hidden_layer, validation_df, validation_y):
+def update_accuracy(
+    activation, y, A_val, validation_y, accuracy, val_accuracy, layer_len
+):
+    acc = compute_accuracy(
+        activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+    )
+    val_acc = compute_accuracy(
+        A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+    )
+    accuracy.append(acc)
+    val_accuracy.append(val_acc)
+
+
+def compute_recall(A, y):
+    A = np.where(A > 0.5, 1, 0)
+    true_positives = np.sum(np.logical_and(A == 1, y == 1))
+    false_negatives = np.sum(np.logical_and(A == 0, y == 1))
+    return true_positives / (true_positives + false_negatives)
+
+
+def update_recall(
+    activation, y, A_val, validation_y, recall_history, val_recall_history, layer_len
+):
+    recall = compute_recall(
+        activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+    )
+    val_recall = compute_recall(
+        A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+    )
+    recall_history.append(recall)
+    val_recall_history.append(val_recall)
+
+
+def compute_precision(A, y):
+    A = np.where(A > 0.5, 1, 0)
+    true_positives = np.sum(np.logical_and(A == 1, y == 1))
+    false_positives = np.sum(np.logical_and(A == 1, y == 0))
+    return true_positives / (true_positives + false_positives)
+
+
+def update_precision(
+    activation,
+    y,
+    A_val,
+    validation_y,
+    precision_history,
+    val_precision_history,
+    layer_len,
+):
+    precision = compute_precision(
+        activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+    )
+    val_precision = compute_precision(
+        A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+    )
+    precision_history.append(precision)
+    val_precision_history.append(val_precision)
+
+
+def update_log_loss(
+    activation, y, A_val, validation_y, loss_history, val_loss_history, layer_len
+):
+    loss = log_loss(activation["Activation_" + str(layer_len)].flatten(), y.flatten())
+    val_loss = log_loss(
+        A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+    )
+    loss_history.append(loss)
+    val_loss_history.append(val_loss)
+
+
+def plot_f1(f1_history, val_f1_history):
+    plt.plot(f1_history)
+    plt.plot(val_f1_history)
+    plt.xscale("log")
+    plt.xlabel("Epoch")
+    plt.ylabel("F1 Score")
+    plt.ylim(0, 1.2)
+    plt.xlim(1, EPOCHS)
+    plt.title("F1 Score vs Epoch")
+    plt.legend(["Train F1 Score", "Validation F1 Score"])
+    plt.show()
+
+
+def compute_f1(A, y):
+    A = np.where(A > 0.5, 1, 0)
+    true_positives = np.sum(np.logical_and(A == 1, y == 1))
+    false_positives = np.sum(np.logical_and(A == 1, y == 0))
+    false_negatives = np.sum(np.logical_and(A == 0, y == 1))
+    precision = true_positives / (true_positives + false_positives)
+    recall = true_positives / (true_positives + false_negatives)
+    return 2 * (precision * recall) / (precision + recall)
+
+
+def update_f1(
+    activation,
+    y,
+    A_val,
+    validation_y,
+    f1_history,
+    val_f1_history,
+    layer_len,
+):
+
+    f1 = compute_f1(activation["Activation_" + str(layer_len)].flatten(), y.flatten())
+    val_f1 = compute_f1(
+        A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+    )
+    f1_history.append(f1)
+    val_f1_history.append(val_f1)
+
+
+def train_model(X, y, hidden_layer, validation_df, validation_y, precision, recall, f1):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
     dimensions.append(y.shape[0])
     parametres = init(dimensions)
+    layer_len = len(parametres) // 2
     loss_history = []
     val_loss_history = []
     accuracy = []
     val_accuracy = []
+    precision_history = []
+    val_precision_history = []
+    recall_history = []
+    val_recall_history = []
+    f1_history = []
+    val_f1_history = []
     activations = forward_propagation(X, parametres)
     gradients = back_propagation(activations, y, parametres)
     for i in range(EPOCHS):
@@ -133,27 +292,69 @@ def train_model(X, y, hidden_layer, validation_df, validation_y):
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, y, parametres)
         parametres = update(gradients, parametres)
-        layer_len = len(parametres) // 2
-        loss = log_loss(
-            activation["Activation_" + str(layer_len)].flatten(), y.flatten()
+        update_log_loss(
+            activation,
+            y,
+            A_val,
+            validation_y,
+            loss_history,
+            val_loss_history,
+            layer_len,
         )
-        val_loss = log_loss(
-            A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
+        update_accuracy(
+            activation, y, A_val, validation_y, accuracy, val_accuracy, layer_len
         )
-        loss_history.append(loss)
-        val_loss_history.append(val_loss)
-        acc = compute_accuracy(
-            activation["Activation_" + str(layer_len)].flatten(), y.flatten()
-        )
-        # print(acc, i, "acc")
-        val_acc = compute_accuracy(
-            A_val["Activation_" + str(layer_len)].flatten(), validation_y.flatten()
-        )
-        accuracy.append(acc)
-        val_accuracy.append(val_acc)
+        if recall:
+            update_recall(
+                activation,
+                y,
+                A_val,
+                validation_y,
+                recall_history,
+                val_recall_history,
+                layer_len,
+            )
+        if precision:
+            update_precision(
+                activation,
+                y,
+                A_val,
+                validation_y,
+                precision_history,
+                val_precision_history,
+                layer_len,
+            )
+        if f1:
+            update_f1(
+                activation,
+                y,
+                A_val,
+                validation_y,
+                f1_history,
+                val_f1_history,
+                layer_len,
+            )
         if i % 10 == 0:
-            print_metrics(i, loss_history, val_loss_history, accuracy, val_accuracy)
+            print_metrics(
+                i,
+                loss_history,
+                val_loss_history,
+                accuracy,
+                val_accuracy,
+                recall_history,
+                val_recall_history,
+                precision_history,
+                val_precision_history,
+                f1_history,
+                val_f1_history,
+            )
     display_progress(loss_history, val_loss_history, accuracy, val_accuracy)
+    if recall:
+        plot_recall(recall_history, val_recall_history)
+    if precision:
+        plot_precision(precision_history, val_precision_history)
+    if f1:
+        plot_f1(f1_history, val_f1_history)
     return slopes, intercept
 
 
@@ -172,6 +373,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--train", help="Path to the train data file")
     parser.add_argument("-v", "--validation", help="Path to the validation data file")
+    parser.add_argument("-r", "--recall", action="store_true", help="Plot the recall")
+    parser.add_argument(
+        "-p", "--precision", action="store_true", help="Plot the precision"
+    )
+    parser.add_argument("-f", "--f1", action="store_true", help="Plot the f1 score")
+    parser.add_argument(
+        "-hl",
+        "--hidden-layers",
+        nargs="+",
+        help="Hidden layers",
+        default=[24, 24, 24],
+        type=int,
+    )
     parser.add_argument(
         "-cm",
         "--confusion-matrix",
@@ -198,7 +412,16 @@ if __name__ == "__main__":
         exit(1)
     df = df.T
     validation_df = validation_df.T
-    hidden_layers = [24, 24, 24]
-    slopes, intercept = train_model(df, y, hidden_layers, validation_df, validation_y)
+    hidden_layers = args.hidden_layers
+    slopes, intercept = train_model(
+        df,
+        y,
+        hidden_layers,
+        validation_df,
+        validation_y,
+        args.precision,
+        args.recall,
+        args.f1,
+    )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
