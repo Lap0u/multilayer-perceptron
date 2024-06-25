@@ -4,7 +4,7 @@ import ml_tools as ml
 import numpy as np
 
 LEARNING_RATE = 0.1
-EPOCHS = 1700
+EPOCHS = 10000
 EPSILON = 1e-15
 
 
@@ -175,7 +175,7 @@ def compute_recall(A, y):
     A = np.where(A > 0.5, 1, 0)
     true_positives = np.sum(np.logical_and(A == 1, y == 1))
     false_negatives = np.sum(np.logical_and(A == 0, y == 1))
-    return true_positives / (true_positives + false_negatives)
+    return true_positives / (true_positives + false_negatives + EPSILON)
 
 
 def update_recall(
@@ -195,7 +195,7 @@ def compute_precision(A, y):
     A = np.where(A > 0.5, 1, 0)
     true_positives = np.sum(np.logical_and(A == 1, y == 1))
     false_positives = np.sum(np.logical_and(A == 1, y == 0))
-    return true_positives / (true_positives + false_positives)
+    return true_positives / (true_positives + false_positives + EPSILON)
 
 
 def update_precision(
@@ -246,9 +246,9 @@ def compute_f1(A, y):
     true_positives = np.sum(np.logical_and(A == 1, y == 1))
     false_positives = np.sum(np.logical_and(A == 1, y == 0))
     false_negatives = np.sum(np.logical_and(A == 0, y == 1))
-    precision = true_positives / (true_positives + false_positives)
-    recall = true_positives / (true_positives + false_negatives)
-    return 2 * (precision * recall) / (precision + recall)
+    precision = true_positives / (true_positives + false_positives + EPSILON)
+    recall = true_positives / (true_positives + false_negatives + EPSILON)
+    return 2 * (precision * recall) / (precision + recall + EPSILON)
 
 
 def update_f1(
@@ -269,7 +269,9 @@ def update_f1(
     val_f1_history.append(val_f1)
 
 
-def train_model(X, y, hidden_layer, validation_df, validation_y, precision, recall, f1):
+def train_model(
+    X, y, hidden_layer, validation_df, batch_size, validation_y, precision, recall, f1
+):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
     dimensions.append(y.shape[0])
@@ -287,14 +289,19 @@ def train_model(X, y, hidden_layer, validation_df, validation_y, precision, reca
     val_f1_history = []
     activations = forward_propagation(X, parametres)
     gradients = back_propagation(activations, y, parametres)
+    print(X)
+    print(parametres)
     for i in range(EPOCHS):
-        activation = forward_propagation(X, parametres)
+        batched_X, batched_y = ml.get_mini_batches(X.T, y.T, batch_size)
+        batched_y = batched_y.T
+        batched_X = batched_X.T
+        activation = forward_propagation(batched_X, parametres)
         A_val = forward_propagation(validation_df, parametres)
-        gradients = back_propagation(activation, y, parametres)
+        gradients = back_propagation(activation, batched_y, parametres)
         parametres = update(gradients, parametres)
         update_log_loss(
             activation,
-            y,
+            batched_y,
             A_val,
             validation_y,
             loss_history,
@@ -302,12 +309,18 @@ def train_model(X, y, hidden_layer, validation_df, validation_y, precision, reca
             layer_len,
         )
         update_accuracy(
-            activation, y, A_val, validation_y, accuracy, val_accuracy, layer_len
+            activation,
+            batched_y,
+            A_val,
+            validation_y,
+            accuracy,
+            val_accuracy,
+            layer_len,
         )
         if recall:
             update_recall(
                 activation,
-                y,
+                batched_y,
                 A_val,
                 validation_y,
                 recall_history,
@@ -317,7 +330,7 @@ def train_model(X, y, hidden_layer, validation_df, validation_y, precision, reca
         if precision:
             update_precision(
                 activation,
-                y,
+                batched_y,
                 A_val,
                 validation_y,
                 precision_history,
@@ -327,7 +340,7 @@ def train_model(X, y, hidden_layer, validation_df, validation_y, precision, reca
         if f1:
             update_f1(
                 activation,
-                y,
+                batched_y,
                 A_val,
                 validation_y,
                 f1_history,
@@ -386,6 +399,7 @@ if __name__ == "__main__":
         default=[24, 24, 24],
         type=int,
     )
+    parser.add_argument("-b", "--batch-size", help="Batch size", default=8, type=int)
     parser.add_argument(
         "-cm",
         "--confusion-matrix",
@@ -414,14 +428,15 @@ if __name__ == "__main__":
     validation_df = validation_df.T
     hidden_layers = args.hidden_layers
     slopes, intercept = train_model(
-        df,
-        y,
-        hidden_layers,
-        validation_df,
-        validation_y,
-        args.precision,
-        args.recall,
-        args.f1,
+        X=df,
+        y=y,
+        hidden_layer=hidden_layers,
+        validation_df=validation_df,
+        validation_y=validation_y,
+        batch_size=args.batch_size,
+        precision=args.precision,
+        recall=args.recall,
+        f1=args.f1,
     )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
