@@ -3,8 +3,8 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.1
-EPOCHS = 10000
+LEARNING_RATE = 0.031
+EPOCHS = 5000
 EPSILON = 1e-15
 
 
@@ -115,7 +115,6 @@ def display_progress(loss_history, val_loss_history, accuracy, val_accuracy):
     plt.plot(val_loss_history)
     plt.plot(accuracy)
     plt.plot(val_accuracy)
-    plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.ylim(0, 1.2)
@@ -130,7 +129,6 @@ def display_progress(loss_history, val_loss_history, accuracy, val_accuracy):
 def plot_precision(precision_history, val_precision_history):
     plt.plot(precision_history)
     plt.plot(val_precision_history)
-    plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("Precision")
     plt.ylim(0, 1.2)
@@ -143,7 +141,6 @@ def plot_precision(precision_history, val_precision_history):
 def plot_recall(recall_history, val_recall_history):
     plt.plot(recall_history)
     plt.plot(val_recall_history)
-    plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("Recall")
     plt.ylim(0, 1.2)
@@ -231,7 +228,6 @@ def update_log_loss(
 def plot_f1(f1_history, val_f1_history):
     plt.plot(f1_history)
     plt.plot(val_f1_history)
-    plt.xscale("log")
     plt.xlabel("Epoch")
     plt.ylabel("F1 Score")
     plt.ylim(0, 1.2)
@@ -269,6 +265,15 @@ def update_f1(
     val_f1_history.append(val_f1)
 
 
+def print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy):
+    best_epoch = np.argmin(val_loss_history)
+    print(f"Best Train Loss: {loss_history[best_epoch]:.3f}")
+    print(f"Best Validation Loss: {val_loss_history[best_epoch]:.3f}")
+    print(f"Best Train Accuracy: {accuracy[best_epoch]:.3f}")
+    print(f"Best Validation Accuracy: {val_accuracy[best_epoch]:.3f}")
+    print(f"Best Epoch: {best_epoch}")
+
+
 def train_model(
     X, y, hidden_layer, validation_df, batch_size, validation_y, precision, recall, f1
 ):
@@ -296,6 +301,7 @@ def train_model(
         batched_y = batched_y.T
         batched_X = batched_X.T
         activation = forward_propagation(batched_X, parametres)
+        # print(activation)
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, batched_y, parametres)
         parametres = update(gradients, parametres)
@@ -368,6 +374,7 @@ def train_model(
         plot_precision(precision_history, val_precision_history)
     if f1:
         plot_f1(f1_history, val_f1_history)
+    print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy)
     return slopes, intercept
 
 
@@ -399,7 +406,7 @@ if __name__ == "__main__":
         default=[24, 24, 24],
         type=int,
     )
-    parser.add_argument("-b", "--batch-size", help="Batch size", default=8, type=int)
+    parser.add_argument("-b", "--batch-size", help="Batch size", type=int)
     parser.add_argument(
         "-cm",
         "--confusion-matrix",

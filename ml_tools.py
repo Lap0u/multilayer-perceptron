@@ -9,7 +9,9 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 
-def get_mini_batches(x, transformed_y, batch):
+def get_mini_batches(x, transformed_y, batch=None):
+    if batch is None:
+        return x, transformed_y
     rand_val = np.random.randint(0, len(x), batch)
     batched_x = x.iloc[rand_val]
     batched_y = transformed_y[rand_val]
