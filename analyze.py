@@ -30,12 +30,17 @@ def generate_headers(data):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--path", help="Path to the data file")
+    parser.add_argument(
+        "-n", "--normalize", action="store_true", help="Normalize the data"
+    )
     parser.add_argument("-hm", "--heatmap", action="store_true", help="plot heatmap")
     args = parser.parse_args()
     try:
         ml.is_valid_path(args.path)
         df = ml.load_csv(args.path, header=None)
         df = generate_headers(df)
+        if args.normalize:
+            df = ml.normalize_df(df)
         print(df.describe())
         df.drop(columns=["Diagnosis"], inplace=True)
         df = ml.clean_data(df)
