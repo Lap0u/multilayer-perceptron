@@ -4,7 +4,7 @@ import ml_tools as ml
 import numpy as np
 
 LEARNING_RATE = 0.1
-EPOCHS = 2000
+EPOCHS = 3000
 EPSILON = 1e-15
 
 
@@ -61,7 +61,7 @@ def back_propagation(activations, y, parametres):
             1 / m * np.sum(dZ, axis=1, keepdims=True)
         )
         if layer > 1:
-            dZ = np.dot(curr_slope.T, dZ) * (prev_activation * (1 - prev_activation))
+            dZ = ml.sigmoid_derivative(prev_activation) * np.dot(curr_slope.T, dZ)
     return gradients
 
 

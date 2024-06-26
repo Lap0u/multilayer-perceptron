@@ -9,8 +9,28 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 
+def tanh_(z):
+    return (np.exp(z) - np.exp(-z)) / (np.exp(z) + np.exp(-z) + 1e-15)
+
+
+def relu_(z):
+    return np.maximum(0, z)
+
+
+def relu_derivative(x):
+    return 1 * (x > 0)
+
+
+def sigmoid_(z):
+    return 1 / (1 + np.exp(-z))
+
+
 def softmax_(z):
     return np.exp(z) / (np.sum(np.exp(z), axis=0) + 1e-15)
+
+
+def sigmoid_derivative(x):
+    return x * (1 - x)
 
 
 def get_mini_batches(x, transformed_y, batch=None):
@@ -64,10 +84,6 @@ def normalize_df(df):
 
 def denormalize_array(list, elem):
     return (elem * (max(list) - min(list))) + min(list)
-
-
-def sigmoid_(z):
-    return 1 / (1 + np.exp(-z))
 
 
 def load_csv(filename, header="infer"):
