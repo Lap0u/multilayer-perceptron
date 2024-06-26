@@ -3,8 +3,8 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.031
-EPOCHS = 5000
+LEARNING_RATE = 0.1
+EPOCHS = 2000
 EPSILON = 1e-15
 
 
@@ -30,7 +30,10 @@ def forward_propagation(X, parametres):
         prev_layer_activation = activations["Activation_" + str(layer - 1)]
 
         Z = np.dot(layer_slope, prev_layer_activation) + layer_intercept
-        curr_layer_activation = 1 / (1 + np.exp(-Z))
+        if layer == layer_len:
+            curr_layer_activation = ml.softmax_(Z)
+        else:
+            curr_layer_activation = ml.sigmoid_(Z)
         activations["Activation_" + str(layer)] = curr_layer_activation
 
     return activations

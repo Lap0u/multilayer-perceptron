@@ -9,6 +9,10 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 
+def softmax_(z):
+    return np.exp(z) / (np.sum(np.exp(z), axis=0) + 1e-15)
+
+
 def get_mini_batches(x, transformed_y, batch=None):
     if batch is None:
         return x, transformed_y
