@@ -31,7 +31,7 @@ def forward_propagation(X, parametres):
 
         Z = np.dot(layer_slope, prev_layer_activation) + layer_intercept
         if layer == layer_len:
-            curr_layer_activation = ml.softmax_(Z)
+            curr_layer_activation = ml.sigmoid_(Z)
         else:
             curr_layer_activation = ml.sigmoid_(Z)
         activations["Activation_" + str(layer)] = curr_layer_activation
@@ -406,7 +406,7 @@ if __name__ == "__main__":
         "--hidden-layers",
         nargs="+",
         help="Hidden layers",
-        default=[24, 24, 24],
+        default=[48, 48],
         type=int,
     )
     parser.add_argument("-b", "--batch-size", help="Batch size", type=int)
