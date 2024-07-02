@@ -3,7 +3,7 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 1.5c'
 EPOCHS = 5000
 EPSILON = 1e-15
 
