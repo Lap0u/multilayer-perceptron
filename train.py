@@ -4,7 +4,7 @@ import ml_tools as ml
 import numpy as np
 
 LEARNING_RATE = 0.1
-EPOCHS = 3000
+EPOCHS = 5000
 EPSILON = 1e-15
 
 
@@ -12,12 +12,14 @@ def init(dimensions):
     parametres = {}
     layer_len = len(dimensions)
     np.random.seed(1)
-
+    init_num = 0.000001
     for layer in range(1, layer_len):
-        parametres["slope_" + str(layer)] = np.random.randn(
-            dimensions[layer], dimensions[layer - 1]
+        parametres["slope_" + str(layer)] = np.random.uniform(
+            -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
         )
-        parametres["intercept_" + str(layer)] = np.random.randn(dimensions[layer], 1)
+        parametres["intercept_" + str(layer)] = np.random.uniform(
+            -init_num, init_num, (dimensions[layer], 1)
+        )
     return parametres
 
 
@@ -34,7 +36,9 @@ def forward_propagation(X, parametres):
             curr_layer_activation = ml.sigmoid_(Z)
         else:
             curr_layer_activation = ml.sigmoid_(Z)
-        activations["Activation_" + str(layer)] = curr_layer_activation
+        activations["Activation_" + str(layer)] = ml.normalize_array(
+            curr_layer_activation
+        )
 
     return activations
 
@@ -406,7 +410,7 @@ if __name__ == "__main__":
         "--hidden-layers",
         nargs="+",
         help="Hidden layers",
-        default=[48, 48],
+        default=[24, 24, 24],
         type=int,
     )
     parser.add_argument("-b", "--batch-size", help="Batch size", type=int)
