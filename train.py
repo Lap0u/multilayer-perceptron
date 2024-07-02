@@ -3,9 +3,10 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 1.5c'
-EPOCHS = 5000
+LEARNING_RATE = 0.1
+EPOCHS = 1000
 EPSILON = 1e-15
+MOMENTUM = 0.9
 
 
 def init(dimensions):
@@ -69,18 +70,35 @@ def back_propagation(activations, y, parametres):
     return gradients
 
 
-def update(gradients, parametres):
-    layer_len = len(parametres) // 2
+def update(gradients, parameters, optimizer, change_slopes, change_intercepts):
+    layer_len = len(parameters) // 2
     for layer in range(1, layer_len + 1):
-        parametres["slope_" + str(layer)] = (
-            parametres["slope_" + str(layer)]
-            - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
-        )
-        parametres["intercept_" + str(layer)] = (
-            parametres["intercept_" + str(layer)]
-            - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
-        )
-    return parametres
+        if optimizer == "momentum":
+            change_slopes["slope_" + str(layer)] = (
+                MOMENTUM * change_slopes["slope_" + str(layer)]
+                - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
+            )
+            change_intercepts["intercept_" + str(layer)] = (
+                MOMENTUM * change_intercepts["intercept_" + str(layer)]
+                - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
+            )
+            parameters["slope_" + str(layer)] = (
+                parameters["slope_" + str(layer)] + change_slopes["slope_" + str(layer)]
+            )
+            parameters["intercept_" + str(layer)] = (
+                parameters["intercept_" + str(layer)]
+                + change_intercepts["intercept_" + str(layer)]
+            )
+        else:
+            parameters["slope_" + str(layer)] = (
+                parameters["slope_" + str(layer)]
+                - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
+            )
+            parameters["intercept_" + str(layer)] = (
+                parameters["intercept_" + str(layer)]
+                - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
+            )
+    return parameters, change_slopes, change_intercepts
 
 
 def print_metrics(
@@ -282,7 +300,16 @@ def print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accur
 
 
 def train_model(
-    X, y, hidden_layer, validation_df, batch_size, validation_y, precision, recall, f1
+    X,
+    y,
+    hidden_layer,
+    validation_df,
+    batch_size,
+    validation_y,
+    precision,
+    recall,
+    f1,
+    optimizer,
 ):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
@@ -303,6 +330,11 @@ def train_model(
     gradients = back_propagation(activations, y, parametres)
     print(X)
     print(parametres)
+    change_slopes = {"slope_" + str(layer): 0 for layer in range(1, layer_len + 1)}
+    change_intercept = {
+        "intercept_" + str(layer): 0 for layer in range(1, layer_len + 1)
+    }
+
     for i in range(EPOCHS):
         batched_X, batched_y = ml.get_mini_batches(X.T, y.T, batch_size)
         batched_y = batched_y.T
@@ -311,7 +343,9 @@ def train_model(
         # print(activation)
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, batched_y, parametres)
-        parametres = update(gradients, parametres)
+        parametres, change_slopes, change_intercept = update(
+            gradients, parametres, optimizer, change_slopes, change_intercept
+        )
         update_log_loss(
             activation,
             batched_y,
@@ -451,6 +485,7 @@ if __name__ == "__main__":
         precision=args.precision,
         recall=args.recall,
         f1=args.f1,
+        optimizer="momentum",
     )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
