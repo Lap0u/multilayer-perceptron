@@ -3,10 +3,10 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.1
-EPOCHS = 1000
+LEARNING_RATE = 0.13
+EPOCHS = 2000
 EPSILON = 1e-15
-MOMENTUM = 0.9
+BETA = 0.9
 
 
 def init(dimensions):
@@ -70,16 +70,24 @@ def back_propagation(activations, y, parametres):
     return gradients
 
 
-def update(gradients, parameters, optimizer, change_slopes, change_intercepts):
+def update(
+    gradients,
+    parameters,
+    optimizer,
+    change_slopes,
+    change_intercepts,
+    S_slopes,
+    S_intercept,
+):
     layer_len = len(parameters) // 2
     for layer in range(1, layer_len + 1):
         if optimizer == "momentum":
             change_slopes["slope_" + str(layer)] = (
-                MOMENTUM * change_slopes["slope_" + str(layer)]
+                BETA * change_slopes["slope_" + str(layer)]
                 - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
             )
             change_intercepts["intercept_" + str(layer)] = (
-                MOMENTUM * change_intercepts["intercept_" + str(layer)]
+                BETA * change_intercepts["intercept_" + str(layer)]
                 - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
             )
             parameters["slope_" + str(layer)] = (
@@ -88,6 +96,25 @@ def update(gradients, parameters, optimizer, change_slopes, change_intercepts):
             parameters["intercept_" + str(layer)] = (
                 parameters["intercept_" + str(layer)]
                 + change_intercepts["intercept_" + str(layer)]
+            )
+        elif optimizer == "rmsprop":
+            S_slopes["slope_" + str(layer)] = (
+                BETA * S_slopes["slope_" + str(layer)]
+                + (1 - BETA) * gradients["d_slopes_" + str(layer)] ** 2
+            )
+            S_intercept["intercept_" + str(layer)] = (
+                BETA * S_intercept["intercept_" + str(layer)]
+                + (1 - BETA) * gradients["d_intercept_" + str(layer)] ** 2
+            )
+            parameters["slope_" + str(layer)] = parameters[
+                "slope_" + str(layer)
+            ] - LEARNING_RATE * gradients["d_slopes_" + str(layer)] / np.sqrt(
+                S_slopes["slope_" + str(layer)] + EPSILON
+            )
+            parameters["intercept_" + str(layer)] = parameters[
+                "intercept_" + str(layer)
+            ] - LEARNING_RATE * gradients["d_intercept_" + str(layer)] / np.sqrt(
+                S_intercept["intercept_" + str(layer)] + EPSILON
             )
         else:
             parameters["slope_" + str(layer)] = (
@@ -98,7 +125,7 @@ def update(gradients, parameters, optimizer, change_slopes, change_intercepts):
                 parameters["intercept_" + str(layer)]
                 - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
             )
-    return parameters, change_slopes, change_intercepts
+    return parameters, change_slopes, change_intercepts, S_slopes, S_intercept
 
 
 def print_metrics(
@@ -334,6 +361,8 @@ def train_model(
     change_intercept = {
         "intercept_" + str(layer): 0 for layer in range(1, layer_len + 1)
     }
+    S_slopes = {"slope_" + str(layer): 0 for layer in range(1, layer_len + 1)}
+    S_intercept = {"intercept_" + str(layer): 0 for layer in range(1, layer_len + 1)}
 
     for i in range(EPOCHS):
         batched_X, batched_y = ml.get_mini_batches(X.T, y.T, batch_size)
@@ -343,8 +372,14 @@ def train_model(
         # print(activation)
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, batched_y, parametres)
-        parametres, change_slopes, change_intercept = update(
-            gradients, parametres, optimizer, change_slopes, change_intercept
+        parametres, change_slopes, change_intercept, S_slopes, S_intercept = update(
+            gradients,
+            parametres,
+            optimizer,
+            change_slopes,
+            change_intercept,
+            S_slopes,
+            S_intercept,
         )
         update_log_loss(
             activation,
@@ -439,6 +474,7 @@ if __name__ == "__main__":
         "-p", "--precision", action="store_true", help="Plot the precision"
     )
     parser.add_argument("-f", "--f1", action="store_true", help="Plot the f1 score")
+    parser.add_argument("-o", "--optimizer", help="Optimizer to use")
     parser.add_argument(
         "-hl",
         "--hidden-layers",
@@ -485,7 +521,7 @@ if __name__ == "__main__":
         precision=args.precision,
         recall=args.recall,
         f1=args.f1,
-        optimizer="momentum",
+        optimizer=args.optimizer,
     )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
