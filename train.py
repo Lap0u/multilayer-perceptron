@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import argparse
 import ml_tools as ml
 import numpy as np
+from typing import Dict, Tuple
 
 LEARNING_RATE = 0.00082963
 EPOCHS = 5000
@@ -71,89 +72,193 @@ def back_propagation(activations, y, parametres):
     return gradients
 
 
-def update(
-    gradients,
+def update_parameters(
+    gradients: Dict[str, np.ndarray],
+    parameters: Dict[str, np.ndarray],
+    optimizer: str,
+    change_slopes: Dict[str, np.ndarray],
+    change_intercepts: Dict[str, np.ndarray],
+    S_slopes: Dict[str, np.ndarray],
+    S_intercepts: Dict[str, np.ndarray],
+) -> Tuple[
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+    Dict[str, np.ndarray],
+]:
+    """
+    Update neural network parameters using the specified optimizer.
+
+    Args:
+        gradients: Dictionary containing gradients for slopes and intercepts.
+        parameters: Dictionary containing current parameter values.
+        optimizer: String specifying the optimization algorithm ('momentum', 'rmsprop', 'adam', or 'sgd').
+        change_slopes: Dictionary containing momentum for slopes.
+        change_intercepts: Dictionary containing momentum for intercepts.
+        S_slopes: Dictionary containing squared gradient accumulations for slopes (used in RMSprop and Adam).
+        S_intercepts: Dictionary containing squared gradient accumulations for intercepts (used in RMSprop and Adam).
+        LEARNING_RATE: Learning rate for parameter updates.
+        BETA: Momentum coefficient (used in momentum and Adam).
+        BETA2: Second moment coefficient (used in RMSprop and Adam).
+        EPSILON: Small value to prevent division by zero.
+
+    Returns:
+        Tuple containing updated parameters and optimizer states.
+    """
+    layer_count = len(parameters) // 2
+
+    for layer in range(1, layer_count + 1):
+        slope_key = f"slope_{layer}"
+        intercept_key = f"intercept_{layer}"
+        d_slope_key = f"d_slopes_{layer}"
+        d_intercept_key = f"d_intercept_{layer}"
+
+        if optimizer == "momentum":
+            _update_momentum(
+                parameters,
+                gradients,
+                change_slopes,
+                change_intercepts,
+                slope_key,
+                intercept_key,
+                d_slope_key,
+                d_intercept_key,
+            )
+        elif optimizer == "rmsprop":
+            _update_rmsprop(
+                parameters,
+                gradients,
+                S_slopes,
+                S_intercepts,
+                slope_key,
+                intercept_key,
+                d_slope_key,
+                d_intercept_key,
+            )
+        elif optimizer == "adam":
+            _update_adam(
+                parameters,
+                gradients,
+                change_slopes,
+                change_intercepts,
+                S_slopes,
+                S_intercepts,
+                slope_key,
+                intercept_key,
+                d_slope_key,
+                d_intercept_key,
+            )
+        elif optimizer == "sgd":
+            _update_sgd(
+                parameters,
+                gradients,
+                slope_key,
+                intercept_key,
+                d_slope_key,
+                d_intercept_key,
+            )
+        else:
+            raise ValueError(f"Unknown optimizer: {optimizer}")
+
+    return parameters, change_slopes, change_intercepts, S_slopes, S_intercepts
+
+
+def _update_momentum(
     parameters,
-    optimizer,
+    gradients,
+    change_slopes,
+    change_intercepts,
+    slope_key,
+    intercept_key,
+    d_slope_key,
+    d_intercept_key,
+):
+    change_slopes[slope_key] = (
+        BETA * change_slopes[slope_key] - LEARNING_RATE * gradients[d_slope_key]
+    )
+    change_intercepts[intercept_key] = (
+        BETA * change_intercepts[intercept_key]
+        - LEARNING_RATE * gradients[d_intercept_key]
+    )
+
+    parameters[slope_key] += change_slopes[slope_key]
+    parameters[intercept_key] += change_intercepts[intercept_key]
+
+
+def _update_rmsprop(
+    parameters,
+    gradients,
+    S_slopes,
+    S_intercepts,
+    slope_key,
+    intercept_key,
+    d_slope_key,
+    d_intercept_key,
+):
+    S_slopes[slope_key] = (
+        BETA2 * S_slopes[slope_key] + (1 - BETA2) * gradients[d_slope_key] ** 2
+    )
+    S_intercepts[intercept_key] = (
+        BETA2 * S_intercepts[intercept_key]
+        + (1 - BETA2) * gradients[d_intercept_key] ** 2
+    )
+
+    parameters[slope_key] -= (
+        LEARNING_RATE * gradients[d_slope_key] / np.sqrt(S_slopes[slope_key] + EPSILON)
+    )
+    parameters[intercept_key] -= (
+        LEARNING_RATE
+        * gradients[d_intercept_key]
+        / np.sqrt(S_intercepts[intercept_key] + EPSILON)
+    )
+
+
+def _update_adam(
+    parameters,
+    gradients,
     change_slopes,
     change_intercepts,
     S_slopes,
-    S_intercept,
+    S_intercepts,
+    slope_key,
+    intercept_key,
+    d_slope_key,
+    d_intercept_key,
 ):
-    layer_len = len(parameters) // 2
-    for layer in range(1, layer_len + 1):
-        if optimizer == "momentum":
-            change_slopes["slope_" + str(layer)] = (
-                BETA * change_slopes["slope_" + str(layer)]
-                - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
-            )
-            change_intercepts["intercept_" + str(layer)] = (
-                BETA * change_intercepts["intercept_" + str(layer)]
-                - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
-            )
-            parameters["slope_" + str(layer)] = (
-                parameters["slope_" + str(layer)] + change_slopes["slope_" + str(layer)]
-            )
-            parameters["intercept_" + str(layer)] = (
-                parameters["intercept_" + str(layer)]
-                + change_intercepts["intercept_" + str(layer)]
-            )
-        elif optimizer == "rmsprop":
-            S_slopes["slope_" + str(layer)] = (
-                BETA2 * S_slopes["slope_" + str(layer)]
-                + (1 - BETA2) * gradients["d_slopes_" + str(layer)] ** 2
-            )
-            S_intercept["intercept_" + str(layer)] = (
-                BETA2 * S_intercept["intercept_" + str(layer)]
-                + (1 - BETA2) * gradients["d_intercept_" + str(layer)] ** 2
-            )
-            parameters["slope_" + str(layer)] = parameters[
-                "slope_" + str(layer)
-            ] - LEARNING_RATE * gradients["d_slopes_" + str(layer)] / np.sqrt(
-                S_slopes["slope_" + str(layer)] + EPSILON
-            )
-            parameters["intercept_" + str(layer)] = parameters[
-                "intercept_" + str(layer)
-            ] - LEARNING_RATE * gradients["d_intercept_" + str(layer)] / np.sqrt(
-                S_intercept["intercept_" + str(layer)] + EPSILON
-            )
-        elif optimizer == "adam":
-            change_slopes["slope_" + str(layer)] = (
-                BETA * change_slopes["slope_" + str(layer)]
-                + (1 - BETA) * gradients["d_slopes_" + str(layer)]
-            )
-            change_intercepts["intercept_" + str(layer)] = (
-                BETA * change_intercepts["intercept_" + str(layer)]
-                + (1 - BETA) * gradients["d_intercept_" + str(layer)]
-            )
-            S_slopes["slope_" + str(layer)] = (
-                BETA2 * S_slopes["slope_" + str(layer)]
-                + (1 - BETA2) * gradients["d_slopes_" + str(layer)] ** 2
-            )
-            S_intercept["intercept_" + str(layer)] = (
-                BETA2 * S_intercept["intercept_" + str(layer)]
-                + (1 - BETA2) * gradients["d_intercept_" + str(layer)] ** 2
-            )
-            parameters["slope_" + str(layer)] = parameters[
-                "slope_" + str(layer)
-            ] - LEARNING_RATE * change_slopes["slope_" + str(layer)] / np.sqrt(
-                S_slopes["slope_" + str(layer)] + EPSILON
-            )
-            parameters["intercept_" + str(layer)] = parameters[
-                "intercept_" + str(layer)
-            ] - LEARNING_RATE * change_intercepts["intercept_" + str(layer)] / np.sqrt(
-                S_intercept["intercept_" + str(layer)] + EPSILON
-            )
-        else:
-            parameters["slope_" + str(layer)] = (
-                parameters["slope_" + str(layer)]
-                - LEARNING_RATE * gradients["d_slopes_" + str(layer)]
-            )
-            parameters["intercept_" + str(layer)] = (
-                parameters["intercept_" + str(layer)]
-                - LEARNING_RATE * gradients["d_intercept_" + str(layer)]
-            )
-    return parameters, change_slopes, change_intercepts, S_slopes, S_intercept
+    change_slopes[slope_key] = (
+        BETA * change_slopes[slope_key] + (1 - BETA) * gradients[d_slope_key]
+    )
+    change_intercepts[intercept_key] = (
+        BETA * change_intercepts[intercept_key]
+        + (1 - BETA) * gradients[d_intercept_key]
+    )
+
+    S_slopes[slope_key] = (
+        BETA2 * S_slopes[slope_key] + (1 - BETA2) * gradients[d_slope_key] ** 2
+    )
+    S_intercepts[intercept_key] = (
+        BETA2 * S_intercepts[intercept_key]
+        + (1 - BETA2) * gradients[d_intercept_key] ** 2
+    )
+
+    parameters[slope_key] -= (
+        LEARNING_RATE
+        * change_slopes[slope_key]
+        / np.sqrt(S_slopes[slope_key] + EPSILON)
+    )
+    parameters[intercept_key] -= (
+        LEARNING_RATE
+        * change_intercepts[intercept_key]
+        / np.sqrt(S_intercepts[intercept_key] + EPSILON)
+    )
+
+
+def _update_sgd(
+    parameters, gradients, slope_key, intercept_key, d_slope_key, d_intercept_key
+):
+    parameters[slope_key] -= LEARNING_RATE * gradients[d_slope_key]
+    parameters[intercept_key] -= LEARNING_RATE * gradients[d_intercept_key]
 
 
 def print_metrics(
@@ -400,14 +505,16 @@ def train_model(
         # print(activation)
         A_val = forward_propagation(validation_df, parametres)
         gradients = back_propagation(activation, batched_y, parametres)
-        parametres, change_slopes, change_intercept, S_slopes, S_intercept = update(
-            gradients,
-            parametres,
-            optimizer,
-            change_slopes,
-            change_intercept,
-            S_slopes,
-            S_intercept,
+        parametres, change_slopes, change_intercept, S_slopes, S_intercept = (
+            update_parameters(
+                gradients,
+                parametres,
+                optimizer,
+                change_slopes,
+                change_intercept,
+                S_slopes,
+                S_intercept,
+            )
         )
         update_log_loss(
             activation,
