@@ -3,10 +3,11 @@ import argparse
 import ml_tools as ml
 import numpy as np
 
-LEARNING_RATE = 0.13
-EPOCHS = 2000
+LEARNING_RATE = 0.00082963
+EPOCHS = 5000
 EPSILON = 1e-15
 BETA = 0.9
+BETA2 = 0.99
 
 
 def init(dimensions):
@@ -99,12 +100,12 @@ def update(
             )
         elif optimizer == "rmsprop":
             S_slopes["slope_" + str(layer)] = (
-                BETA * S_slopes["slope_" + str(layer)]
-                + (1 - BETA) * gradients["d_slopes_" + str(layer)] ** 2
+                BETA2 * S_slopes["slope_" + str(layer)]
+                + (1 - BETA2) * gradients["d_slopes_" + str(layer)] ** 2
             )
             S_intercept["intercept_" + str(layer)] = (
-                BETA * S_intercept["intercept_" + str(layer)]
-                + (1 - BETA) * gradients["d_intercept_" + str(layer)] ** 2
+                BETA2 * S_intercept["intercept_" + str(layer)]
+                + (1 - BETA2) * gradients["d_intercept_" + str(layer)] ** 2
             )
             parameters["slope_" + str(layer)] = parameters[
                 "slope_" + str(layer)
@@ -114,6 +115,33 @@ def update(
             parameters["intercept_" + str(layer)] = parameters[
                 "intercept_" + str(layer)
             ] - LEARNING_RATE * gradients["d_intercept_" + str(layer)] / np.sqrt(
+                S_intercept["intercept_" + str(layer)] + EPSILON
+            )
+        elif optimizer == "adam":
+            change_slopes["slope_" + str(layer)] = (
+                BETA * change_slopes["slope_" + str(layer)]
+                + (1 - BETA) * gradients["d_slopes_" + str(layer)]
+            )
+            change_intercepts["intercept_" + str(layer)] = (
+                BETA * change_intercepts["intercept_" + str(layer)]
+                + (1 - BETA) * gradients["d_intercept_" + str(layer)]
+            )
+            S_slopes["slope_" + str(layer)] = (
+                BETA2 * S_slopes["slope_" + str(layer)]
+                + (1 - BETA2) * gradients["d_slopes_" + str(layer)] ** 2
+            )
+            S_intercept["intercept_" + str(layer)] = (
+                BETA2 * S_intercept["intercept_" + str(layer)]
+                + (1 - BETA2) * gradients["d_intercept_" + str(layer)] ** 2
+            )
+            parameters["slope_" + str(layer)] = parameters[
+                "slope_" + str(layer)
+            ] - LEARNING_RATE * change_slopes["slope_" + str(layer)] / np.sqrt(
+                S_slopes["slope_" + str(layer)] + EPSILON
+            )
+            parameters["intercept_" + str(layer)] = parameters[
+                "intercept_" + str(layer)
+            ] - LEARNING_RATE * change_intercepts["intercept_" + str(layer)] / np.sqrt(
                 S_intercept["intercept_" + str(layer)] + EPSILON
             )
         else:
