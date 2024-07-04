@@ -4,8 +4,8 @@ import ml_tools as ml
 import numpy as np
 from typing import Dict, Tuple
 
-LEARNING_RATE = 0.00082963
-EPOCHS = 5000
+LEARNING_RATE = 0.004
+EPOCHS = 1000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
@@ -98,11 +98,6 @@ def update_parameters(
         change_intercepts: Dictionary containing momentum for intercepts.
         S_slopes: Dictionary containing squared gradient accumulations for slopes (used in RMSprop and Adam).
         S_intercepts: Dictionary containing squared gradient accumulations for intercepts (used in RMSprop and Adam).
-        LEARNING_RATE: Learning rate for parameter updates.
-        BETA: Momentum coefficient (used in momentum and Adam).
-        BETA2: Second moment coefficient (used in RMSprop and Adam).
-        EPSILON: Small value to prevent division by zero.
-
     Returns:
         Tuple containing updated parameters and optimizer states.
     """
