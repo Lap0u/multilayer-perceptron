@@ -4,8 +4,9 @@ import ml_tools as ml
 import numpy as np
 from typing import Dict, Tuple
 
-LEARNING_RATE = 0.004
-EPOCHS = 1000
+# SGD 24 24 24 24 LR 0.36 Val 0.75
+LEARNING_RATE = 0.36
+EPOCHS = 4000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
@@ -144,7 +145,7 @@ def update_parameters(
                 d_slope_key,
                 d_intercept_key,
             )
-        elif optimizer == "sgd":
+        else:
             _update_sgd(
                 parameters,
                 gradients,
@@ -153,8 +154,6 @@ def update_parameters(
                 d_slope_key,
                 d_intercept_key,
             )
-        else:
-            raise ValueError(f"Unknown optimizer: {optimizer}")
 
     return parameters, change_slopes, change_intercepts, S_slopes, S_intercepts
 
@@ -581,7 +580,7 @@ def train_model(
     if f1:
         plot_f1(f1_history, val_f1_history)
     print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy)
-    return slopes, intercept
+    return parametres
 
 
 def display_predictions(x, y, slopes, intercept, validation_df, validation_y):
@@ -641,7 +640,7 @@ if __name__ == "__main__":
     df = df.T
     validation_df = validation_df.T
     hidden_layers = args.hidden_layers
-    slopes, intercept = train_model(
+    parameters = train_model(
         X=df,
         y=y,
         hidden_layer=hidden_layers,
