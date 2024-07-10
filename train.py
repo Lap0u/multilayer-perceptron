@@ -4,19 +4,40 @@ import ml_tools as ml
 import numpy as np
 from typing import Dict, Tuple
 
-# SGD 24 24 24 24 LR 0.36 Val 0.75
-LEARNING_RATE = 0.36
-EPOCHS = 4000
+# SGD SIG 1 6000 1e-15 0.9 0.99 / 32 32 32 32 (init 0.000001 loss 0.096)
+# SGD TANH 1 6000 1e-15 0.9 0.99 / 32 32 32 (init 0.01 loss 0.052)
+# SGD TANH 0.03 6000 1e-15 0.9 0.99 / 32 32 32 (init 1 loss 0.096)
+# SGD TANH 0.03 6000 1e-15 0.9 0.99 / 32 32 32 (init 1 loss 0.049 adam)
+LEARNING_RATE = 0.3
+EPOCHS = 3000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
+
+
+def get_optimizer(optimizer):
+    if optimizer == "momentum":
+        return _update_momentum
+    if optimizer == "rmsprop":
+        return _update_rmsprop
+    if optimizer == "adam":
+        return _update_adam
+    return _update_sgd
+
+
+def get_activation(activation):
+    if activation == "tanh":
+        return ml.tanh_, ml.tanh_derivative
+    if activation == "relu":
+        return ml.relu_, ml.relu_derivative
+    return ml.sigmoid_, ml.sigmoid_derivative
 
 
 def init(dimensions):
     parametres = {}
     layer_len = len(dimensions)
     np.random.seed(1)
-    init_num = 0.000001
+    init_num = 0.01
     for layer in range(1, layer_len):
         parametres["slope_" + str(layer)] = np.random.uniform(
             -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
@@ -27,7 +48,7 @@ def init(dimensions):
     return parametres
 
 
-def forward_propagation(X, parametres):
+def forward_propagation(X, parametres, activation_function):
     activations = {"Activation_0": X}
     layer_len = len(parametres) // 2
     for layer in range(1, layer_len + 1):
@@ -37,12 +58,10 @@ def forward_propagation(X, parametres):
 
         Z = np.dot(layer_slope, prev_layer_activation) + layer_intercept
         if layer == layer_len:
-            curr_layer_activation = ml.sigmoid_(Z)
+            curr_layer_activation = ml.softmax_(Z)
         else:
-            curr_layer_activation = ml.sigmoid_(Z)
-        activations["Activation_" + str(layer)] = ml.normalize_array(
-            curr_layer_activation
-        )
+            curr_layer_activation = activation_function(Z)
+        activations["Activation_" + str(layer)] = curr_layer_activation
 
     return activations
 
@@ -55,7 +74,7 @@ def log_loss(A, y):
     )
 
 
-def back_propagation(activations, y, parametres):
+def back_propagation(activations, y, parametres, activation_derivative):
     layer_len = len(parametres) // 2
     m = y.shape[1]
 
@@ -69,14 +88,14 @@ def back_propagation(activations, y, parametres):
             1 / m * np.sum(dZ, axis=1, keepdims=True)
         )
         if layer > 1:
-            dZ = ml.sigmoid_derivative(prev_activation) * np.dot(curr_slope.T, dZ)
+            dZ = activation_derivative(prev_activation) * np.dot(curr_slope.T, dZ)
     return gradients
 
 
 def update_parameters(
     gradients: Dict[str, np.ndarray],
     parameters: Dict[str, np.ndarray],
-    optimizer: str,
+    optimizer_func: str,
     change_slopes: Dict[str, np.ndarray],
     change_intercepts: Dict[str, np.ndarray],
     S_slopes: Dict[str, np.ndarray],
@@ -110,50 +129,18 @@ def update_parameters(
         d_slope_key = f"d_slopes_{layer}"
         d_intercept_key = f"d_intercept_{layer}"
 
-        if optimizer == "momentum":
-            _update_momentum(
-                parameters,
-                gradients,
-                change_slopes,
-                change_intercepts,
-                slope_key,
-                intercept_key,
-                d_slope_key,
-                d_intercept_key,
-            )
-        elif optimizer == "rmsprop":
-            _update_rmsprop(
-                parameters,
-                gradients,
-                S_slopes,
-                S_intercepts,
-                slope_key,
-                intercept_key,
-                d_slope_key,
-                d_intercept_key,
-            )
-        elif optimizer == "adam":
-            _update_adam(
-                parameters,
-                gradients,
-                change_slopes,
-                change_intercepts,
-                S_slopes,
-                S_intercepts,
-                slope_key,
-                intercept_key,
-                d_slope_key,
-                d_intercept_key,
-            )
-        else:
-            _update_sgd(
-                parameters,
-                gradients,
-                slope_key,
-                intercept_key,
-                d_slope_key,
-                d_intercept_key,
-            )
+        optimizer_func(
+            parameters,
+            gradients,
+            slope_key,
+            intercept_key,
+            d_slope_key,
+            d_intercept_key,
+            change_slopes,
+            change_intercepts,
+            S_slopes,
+            S_intercepts,
+        )
 
     return parameters, change_slopes, change_intercepts, S_slopes, S_intercepts
 
@@ -161,12 +148,13 @@ def update_parameters(
 def _update_momentum(
     parameters,
     gradients,
-    change_slopes,
-    change_intercepts,
     slope_key,
     intercept_key,
     d_slope_key,
     d_intercept_key,
+    change_slopes,
+    change_intercepts,
+    *args,
 ):
     change_slopes[slope_key] = (
         BETA * change_slopes[slope_key] - LEARNING_RATE * gradients[d_slope_key]
@@ -183,12 +171,13 @@ def _update_momentum(
 def _update_rmsprop(
     parameters,
     gradients,
-    S_slopes,
-    S_intercepts,
     slope_key,
     intercept_key,
     d_slope_key,
     d_intercept_key,
+    S_slopes,
+    S_intercepts,
+    *args,
 ):
     S_slopes[slope_key] = (
         BETA2 * S_slopes[slope_key] + (1 - BETA2) * gradients[d_slope_key] ** 2
@@ -211,14 +200,14 @@ def _update_rmsprop(
 def _update_adam(
     parameters,
     gradients,
-    change_slopes,
-    change_intercepts,
-    S_slopes,
-    S_intercepts,
     slope_key,
     intercept_key,
     d_slope_key,
     d_intercept_key,
+    change_slopes,
+    change_intercepts,
+    S_slopes,
+    S_intercepts,
 ):
     change_slopes[slope_key] = (
         BETA * change_slopes[slope_key] + (1 - BETA) * gradients[d_slope_key]
@@ -249,7 +238,7 @@ def _update_adam(
 
 
 def _update_sgd(
-    parameters, gradients, slope_key, intercept_key, d_slope_key, d_intercept_key
+    parameters, gradients, slope_key, intercept_key, d_slope_key, d_intercept_key, *args
 ):
     parameters[slope_key] -= LEARNING_RATE * gradients[d_slope_key]
     parameters[intercept_key] -= LEARNING_RATE * gradients[d_intercept_key]
@@ -445,7 +434,19 @@ def update_f1(
 
 
 def print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy):
-    best_epoch = np.argmin(val_loss_history)
+    masked_loss = [
+        val_loss
+        for val_loss, loss in zip(val_loss_history, loss_history)
+        if loss <= val_loss
+    ]
+
+    best_epoch_index = np.argmin(masked_loss)
+    # best_epoch_index = np.argmin(val_loss_history)
+    best_epoch = next(
+        i
+        for i, (loss, val_loss) in enumerate(zip(loss_history, val_loss_history))
+        if loss <= val_loss and val_loss == masked_loss[best_epoch_index]
+    )
     print(f"Best Train Loss: {loss_history[best_epoch]:.3f}")
     print(f"Best Validation Loss: {val_loss_history[best_epoch]:.3f}")
     print(f"Best Train Accuracy: {accuracy[best_epoch]:.3f}")
@@ -464,6 +465,8 @@ def train_model(
     recall,
     f1,
     optimizer,
+    activation_function,
+    activation_derivative,
 ):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
@@ -480,10 +483,6 @@ def train_model(
     val_recall_history = []
     f1_history = []
     val_f1_history = []
-    activations = forward_propagation(X, parametres)
-    gradients = back_propagation(activations, y, parametres)
-    print(X)
-    print(parametres)
     change_slopes = {"slope_" + str(layer): 0 for layer in range(1, layer_len + 1)}
     change_intercept = {
         "intercept_" + str(layer): 0 for layer in range(1, layer_len + 1)
@@ -495,10 +494,11 @@ def train_model(
         batched_X, batched_y = ml.get_mini_batches(X.T, y.T, batch_size)
         batched_y = batched_y.T
         batched_X = batched_X.T
-        activation = forward_propagation(batched_X, parametres)
-        # print(activation)
-        A_val = forward_propagation(validation_df, parametres)
-        gradients = back_propagation(activation, batched_y, parametres)
+        activation = forward_propagation(batched_X, parametres, activation_function)
+        A_val = forward_propagation(validation_df, parametres, activation_function)
+        gradients = back_propagation(
+            activation, batched_y, parametres, activation_derivative
+        )
         parametres, change_slopes, change_intercept, S_slopes, S_intercept = (
             update_parameters(
                 gradients,
@@ -605,6 +605,9 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--f1", action="store_true", help="Plot the f1 score")
     parser.add_argument("-o", "--optimizer", help="Optimizer to use")
     parser.add_argument(
+        "-a", "--activation", help="Activation function to use", default="sigmoid"
+    )
+    parser.add_argument(
         "-hl",
         "--hidden-layers",
         nargs="+",
@@ -621,6 +624,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     try:
+        activation, activation_derivative = get_activation(args.activation)
+        optimizer = get_optimizer(args.optimizer)
         ml.is_valid_path(args.train)
         ml.is_valid_path(args.validation)
         df = ml.load_csv(args.train)
@@ -650,7 +655,9 @@ if __name__ == "__main__":
         precision=args.precision,
         recall=args.recall,
         f1=args.f1,
-        optimizer=args.optimizer,
+        optimizer=optimizer,
+        activation_function=activation,
+        activation_derivative=activation_derivative,
     )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)

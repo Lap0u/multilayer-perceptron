@@ -13,6 +13,10 @@ def tanh_(z):
     return (np.exp(z) - np.exp(-z)) / (np.exp(z) + np.exp(-z) + 1e-15)
 
 
+def tanh_derivative(x):
+    return 1 - np.power(x, 2)
+
+
 def relu_(z):
     return np.maximum(0, z)
 
