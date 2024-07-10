@@ -5,14 +5,12 @@ import numpy as np
 from typing import Dict, Tuple
 
 # SGD SIG 1 6000 1e-15 0.9 0.99 / 32 32 32 32 (init 0.000001 loss 0.096)
-# SGD TANH 1 6000 1e-15 0.9 0.99 / 32 32 32 (init 0.01 loss 0.052)
-# SGD TANH 0.03 6000 1e-15 0.9 0.99 / 32 32 32 (init 1 loss 0.096)
-# SGD TANH 0.03 6000 1e-15 0.9 0.99 / 32 32 32 (init 1 loss 0.049 adam)
-LEARNING_RATE = 0.3
-EPOCHS = 3000
+LEARNING_RATE = 0.1
+EPOCHS = 6000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
+PATIENCE = 100
 
 
 def get_optimizer(optimizer):
@@ -467,6 +465,7 @@ def train_model(
     optimizer,
     activation_function,
     activation_derivative,
+    early_stopping=False,
 ):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
@@ -558,7 +557,7 @@ def train_model(
                 val_f1_history,
                 layer_len,
             )
-        if i % 10 == 0:
+            # if i % 10 == 0:
             print_metrics(
                 i,
                 loss_history,
@@ -572,6 +571,13 @@ def train_model(
                 f1_history,
                 val_f1_history,
             )
+        if early_stopping and i > PATIENCE:
+            if (
+                val_loss_history[i] > val_loss_history[i - 1]
+                and val_loss_history[i - 1] > val_loss_history[i - 2]
+                and val_loss_history[i - 2] > val_loss_history[i - 3]
+            ):
+                break
     display_progress(loss_history, val_loss_history, accuracy, val_accuracy)
     if recall:
         plot_recall(recall_history, val_recall_history)
@@ -606,6 +612,9 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--optimizer", help="Optimizer to use")
     parser.add_argument(
         "-a", "--activation", help="Activation function to use", default="sigmoid"
+    )
+    parser.add_argument(
+        "-es", "--early-stopping", help="Early stopping", action="store_true"
     )
     parser.add_argument(
         "-hl",
@@ -658,6 +667,7 @@ if __name__ == "__main__":
         optimizer=optimizer,
         activation_function=activation,
         activation_derivative=activation_derivative,
+        early_stopping=args.early_stopping,
     )
     if args.confusion_matrix:
         display_predictions(df, y, slopes, intercept, validation_df, validation_y)
