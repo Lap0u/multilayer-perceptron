@@ -557,20 +557,20 @@ def train_model(
                 val_f1_history,
                 layer_len,
             )
-            if i % 10 == 0:
-                print_metrics(
-                    i,
-                    loss_history,
-                    val_loss_history,
-                    accuracy,
-                    val_accuracy,
-                    recall_history,
-                    val_recall_history,
-                    precision_history,
-                    val_precision_history,
-                    f1_history,
-                    val_f1_history,
-                )
+        if i % 10 == 0:
+            print_metrics(
+                i,
+                loss_history,
+                val_loss_history,
+                accuracy,
+                val_accuracy,
+                recall_history,
+                val_recall_history,
+                precision_history,
+                val_precision_history,
+                f1_history,
+                val_f1_history,
+            )
         if early_stopping and i > PATIENCE:
             if (
                 val_loss_history[i] > val_loss_history[i - 1]
@@ -610,8 +610,12 @@ def display_predictions(x, y, parameters, validation_df, validation_y, activatio
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--train", help="Path to the train data file")
-    parser.add_argument("-v", "--validation", help="Path to the validation data file")
+    parser.add_argument(
+        "-t", "--train", required=True, help="Path to the train data file"
+    )
+    parser.add_argument(
+        "-v", "--validation", required=True, help="Path to the validation data file"
+    )
     parser.add_argument("-r", "--recall", action="store_true", help="Plot the recall")
     parser.add_argument(
         "-p", "--precision", action="store_true", help="Plot the precision"
@@ -678,3 +682,9 @@ if __name__ == "__main__":
     )
     if args.confusion_matrix:
         display_predictions(df, y, parameters, validation_df, validation_y, activation)
+    save_data = {
+        "parameters": parameters,
+        "activation": args.activation,
+        "hidden_layers": args.hidden_layers,
+    }
+    np.save("parameters.npy", save_data)
