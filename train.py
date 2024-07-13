@@ -5,7 +5,7 @@ import numpy as np
 from typing import Dict, Tuple
 
 # SGD SIG 1 6000 1e-15 0.9 0.99 / 32 32 32 32 (init 0.000001 loss 0.096)
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.3
 EPOCHS = 6000
 EPSILON = 1e-15
 BETA = 0.9
@@ -32,26 +32,26 @@ def get_activation(activation):
 
 
 def init(dimensions):
-    parametres = {}
+    parameters = {}
     layer_len = len(dimensions)
     np.random.seed(1)
     init_num = 0.01
     for layer in range(1, layer_len):
-        parametres["slope_" + str(layer)] = np.random.uniform(
+        parameters["slope_" + str(layer)] = np.random.uniform(
             -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
         )
-        parametres["intercept_" + str(layer)] = np.random.uniform(
+        parameters["intercept_" + str(layer)] = np.random.uniform(
             -init_num, init_num, (dimensions[layer], 1)
         )
-    return parametres
+    return parameters
 
 
-def forward_propagation(X, parametres, activation_function):
+def forward_propagation(X, parameters, activation_function):
     activations = {"Activation_0": X}
-    layer_len = len(parametres) // 2
+    layer_len = len(parameters) // 2
     for layer in range(1, layer_len + 1):
-        layer_slope = parametres["slope_" + str(layer)]
-        layer_intercept = parametres["intercept_" + str(layer)]
+        layer_slope = parameters["slope_" + str(layer)]
+        layer_intercept = parameters["intercept_" + str(layer)]
         prev_layer_activation = activations["Activation_" + str(layer - 1)]
 
         Z = np.dot(layer_slope, prev_layer_activation) + layer_intercept
@@ -72,15 +72,15 @@ def log_loss(A, y):
     )
 
 
-def back_propagation(activations, y, parametres, activation_derivative):
-    layer_len = len(parametres) // 2
+def back_propagation(activations, y, parameters, activation_derivative):
+    layer_len = len(parameters) // 2
     m = y.shape[1]
 
     dZ = activations["Activation_" + str(layer_len)] - y
     gradients = {}
     for layer in reversed(range(1, layer_len + 1)):
         prev_activation = activations["Activation_" + str(layer - 1)]
-        curr_slope = parametres["slope_" + str(layer)]
+        curr_slope = parameters["slope_" + str(layer)]
         gradients["d_slopes_" + str(layer)] = 1 / m * np.dot(dZ, prev_activation.T)
         gradients["d_intercept_" + str(layer)] = (
             1 / m * np.sum(dZ, axis=1, keepdims=True)
@@ -432,6 +432,7 @@ def update_f1(
 
 
 def print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy):
+    # evite les cas ou la validation est plus basse que l'entrainement (training chanceux)
     masked_loss = [
         val_loss
         for val_loss, loss in zip(val_loss_history, loss_history)
@@ -439,7 +440,6 @@ def print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accur
     ]
 
     best_epoch_index = np.argmin(masked_loss)
-    # best_epoch_index = np.argmin(val_loss_history)
     best_epoch = next(
         i
         for i, (loss, val_loss) in enumerate(zip(loss_history, val_loss_history))
@@ -470,8 +470,8 @@ def train_model(
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
     dimensions.append(y.shape[0])
-    parametres = init(dimensions)
-    layer_len = len(parametres) // 2
+    parameters = init(dimensions)
+    layer_len = len(parameters) // 2
     loss_history = []
     val_loss_history = []
     accuracy = []
@@ -493,15 +493,15 @@ def train_model(
         batched_X, batched_y = ml.get_mini_batches(X.T, y.T, batch_size)
         batched_y = batched_y.T
         batched_X = batched_X.T
-        activation = forward_propagation(batched_X, parametres, activation_function)
-        A_val = forward_propagation(validation_df, parametres, activation_function)
+        activation = forward_propagation(batched_X, parameters, activation_function)
+        A_val = forward_propagation(validation_df, parameters, activation_function)
         gradients = back_propagation(
-            activation, batched_y, parametres, activation_derivative
+            activation, batched_y, parameters, activation_derivative
         )
-        parametres, change_slopes, change_intercept, S_slopes, S_intercept = (
+        parameters, change_slopes, change_intercept, S_slopes, S_intercept = (
             update_parameters(
                 gradients,
-                parametres,
+                parameters,
                 optimizer,
                 change_slopes,
                 change_intercept,
@@ -557,20 +557,20 @@ def train_model(
                 val_f1_history,
                 layer_len,
             )
-            # if i % 10 == 0:
-            print_metrics(
-                i,
-                loss_history,
-                val_loss_history,
-                accuracy,
-                val_accuracy,
-                recall_history,
-                val_recall_history,
-                precision_history,
-                val_precision_history,
-                f1_history,
-                val_f1_history,
-            )
+            if i % 10 == 0:
+                print_metrics(
+                    i,
+                    loss_history,
+                    val_loss_history,
+                    accuracy,
+                    val_accuracy,
+                    recall_history,
+                    val_recall_history,
+                    precision_history,
+                    val_precision_history,
+                    f1_history,
+                    val_f1_history,
+                )
         if early_stopping and i > PATIENCE:
             if (
                 val_loss_history[i] > val_loss_history[i - 1]
@@ -586,17 +586,25 @@ def train_model(
     if f1:
         plot_f1(f1_history, val_f1_history)
     print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy)
-    return parametres
+    return parameters
 
 
-def display_predictions(x, y, slopes, intercept, validation_df, validation_y):
-    predictions = forward_propagation(slopes, intercept, x)
-    predictions = np.where(predictions > 0.5, 1, 0)
-    ml.plot_confusion_matrix(y, predictions, ["B", "M"], title="Train Confusion Matrix")
-    val_predictions = forward_propagation(slopes, intercept, validation_df)
-    val_predictions = np.where(val_predictions > 0.5, 1, 0)
+def display_predictions(x, y, parameters, validation_df, validation_y, activation):
+    layer_len = len(parameters) // 2
+    predictions = forward_propagation(x, parameters, activation)
+    predictions = np.where(predictions["Activation_" + str(layer_len)] > 0.5, 1, 0)
     ml.plot_confusion_matrix(
-        validation_y, val_predictions, ["B", "M"], title="Validation Confusion Matrix"
+        y.flatten(), predictions.flatten(), ["B", "M"], title="Train Confusion Matrix"
+    )
+    val_predictions = forward_propagation(validation_df, parameters, activation)
+    val_predictions = np.where(
+        val_predictions["Activation_" + str(layer_len)] > 0.5, 1, 0
+    )
+    ml.plot_confusion_matrix(
+        validation_y.flatten(),
+        val_predictions.flatten(),
+        ["B", "M"],
+        title="Validation Confusion Matrix",
     )
 
 
@@ -647,7 +655,6 @@ if __name__ == "__main__":
         y = df.pop("Diagnosis")
         y = np.array(diagnosis_to_numeric(y), ndmin=2)
         df = ml.normalize_df(df)
-        print(df)
     except Exception as e:
         print(e)
         exit(1)
@@ -670,4 +677,4 @@ if __name__ == "__main__":
         early_stopping=args.early_stopping,
     )
     if args.confusion_matrix:
-        display_predictions(df, y, slopes, intercept, validation_df, validation_y)
+        display_predictions(df, y, parameters, validation_df, validation_y, activation)
