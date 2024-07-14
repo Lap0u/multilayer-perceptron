@@ -37,11 +37,9 @@ if __name__ == "__main__":
         exit(1)
     activation = predict(df, parameters)
     predictions = activation["Activation_" + str(layer_len)]
-    print(predictions)
     loss = train.log_loss(predictions.flatten(), y.flatten())
     print("Loss for the given dataset with trained weights : ", loss)
     predictions = np.where(predictions > 0.5, 1, 0)
-    print("predictions : ", predictions)
     ml.plot_confusion_matrix(
         predictions.flatten(), y.flatten(), ["B", "M"], title="Confusion Matrix"
     )

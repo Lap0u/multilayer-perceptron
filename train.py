@@ -3,9 +3,10 @@ import argparse
 import ml_tools as ml
 import numpy as np
 from typing import Dict, Tuple
+import copy
 
 # SGD SIG 1 6000 1e-15 0.9 0.99 / 32 32 32 32 (init 0.000001 loss 0.096)
-LEARNING_RATE = 0.3
+LEARNING_RATE = 0.1
 EPOCHS = 6000
 EPSILON = 1e-15
 BETA = 0.9
@@ -35,7 +36,7 @@ def init(dimensions):
     parameters = {}
     layer_len = len(dimensions)
     np.random.seed(1)
-    init_num = 0.01
+    init_num = 0.000001
     for layer in range(1, layer_len):
         parameters["slope_" + str(layer)] = np.random.uniform(
             -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
@@ -389,6 +390,7 @@ def update_log_loss(
     )
     loss_history.append(loss)
     val_loss_history.append(val_loss)
+    return val_loss
 
 
 def plot_f1(f1_history, val_f1_history):
@@ -471,7 +473,9 @@ def train_model(
     dimensions.insert(0, X.shape[0])
     dimensions.append(y.shape[0])
     parameters = init(dimensions)
+    best_parameters = dict(parameters)
     layer_len = len(parameters) // 2
+    best_loss = -1
     loss_history = []
     val_loss_history = []
     accuracy = []
@@ -509,7 +513,7 @@ def train_model(
                 S_intercept,
             )
         )
-        update_log_loss(
+        curr_loss = update_log_loss(
             activation,
             batched_y,
             A_val,
@@ -518,6 +522,10 @@ def train_model(
             val_loss_history,
             layer_len,
         )
+        if curr_loss < best_loss or best_loss == -1:
+            best_parameters = copy.deepcopy(parameters)
+            best_loss = curr_loss
+
         update_accuracy(
             activation,
             batched_y,
@@ -586,7 +594,7 @@ def train_model(
     if f1:
         plot_f1(f1_history, val_f1_history)
     print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy)
-    return parameters
+    return best_parameters
 
 
 def display_predictions(x, y, parameters, validation_df, validation_y, activation):
