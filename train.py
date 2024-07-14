@@ -5,9 +5,9 @@ import numpy as np
 from typing import Dict, Tuple
 import copy
 
-# SGD SIG 1 6000 1e-15 0.9 0.99 / 32 32 32 32 (init 0.000001 loss 0.096)
-LEARNING_RATE = 0.1
-EPOCHS = 6000
+# SGD SIG 0.031 300 1e-15 0.9 0.99 / 24 24 24 (init 0.000001 loss 0.092) RMS
+LEARNING_RATE = 0.003
+EPOCHS = 3000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
@@ -36,14 +36,12 @@ def init(dimensions):
     parameters = {}
     layer_len = len(dimensions)
     np.random.seed(1)
-    init_num = 0.000001
+    init_num = 0.3
     for layer in range(1, layer_len):
         parameters["slope_" + str(layer)] = np.random.uniform(
             -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
         )
-        parameters["intercept_" + str(layer)] = np.random.uniform(
-            -init_num, init_num, (dimensions[layer], 1)
-        )
+        parameters["intercept_" + str(layer)] = 0
     return parameters
 
 
@@ -390,7 +388,7 @@ def update_log_loss(
     )
     loss_history.append(loss)
     val_loss_history.append(val_loss)
-    return val_loss
+    return loss, val_loss
 
 
 def plot_f1(f1_history, val_f1_history):
@@ -502,6 +500,20 @@ def train_model(
         gradients = back_propagation(
             activation, batched_y, parameters, activation_derivative
         )
+        curr_train_loss, curr_val_loss = update_log_loss(
+            activation,
+            batched_y,
+            A_val,
+            validation_y,
+            loss_history,
+            val_loss_history,
+            layer_len,
+        )
+        if curr_train_loss <= curr_val_loss and (
+            curr_val_loss < best_loss or best_loss == -1
+        ):
+            best_parameters = copy.deepcopy(parameters)
+            best_loss = curr_val_loss
         parameters, change_slopes, change_intercept, S_slopes, S_intercept = (
             update_parameters(
                 gradients,
@@ -513,18 +525,6 @@ def train_model(
                 S_intercept,
             )
         )
-        curr_loss = update_log_loss(
-            activation,
-            batched_y,
-            A_val,
-            validation_y,
-            loss_history,
-            val_loss_history,
-            layer_len,
-        )
-        if curr_loss < best_loss or best_loss == -1:
-            best_parameters = copy.deepcopy(parameters)
-            best_loss = curr_loss
 
         update_accuracy(
             activation,
@@ -595,6 +595,15 @@ def train_model(
         plot_f1(f1_history, val_f1_history)
     print_best_loss_accuracy(loss_history, val_loss_history, accuracy, val_accuracy)
     return best_parameters
+
+
+def try_predict(parameters, validation_df, validation_y, activation_function):
+    # print("weights", parameters)
+    print("activation_function", activation_function)
+    A_val = forward_propagation(validation_df, parameters, activation_function)
+    print("A_val", A_val["Activation_4"])
+    loss = log_loss(A_val["Activation_4"].flatten(), validation_y.flatten())
+    print("Loss for the given dataset with trained weights : ", loss)
 
 
 def display_predictions(x, y, parameters, validation_df, validation_y, activation):
