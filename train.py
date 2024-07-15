@@ -8,8 +8,8 @@ import copy
 # TANH 0.1431  1e-15 0.9 0.99 / 24 24 24 (xavier normalized init (seed 42) loss 0.054)
 # TANH 0.01  1e-15 0.9 0.99 / 24 24 24 (xavier normalized init (seed 42) loss 0.060) MOMENTUM
 
-LEARNING_RATE = 0.031
-EPOCHS = 3000
+LEARNING_RATE = 0.1431
+EPOCHS = 2000
 EPSILON = 1e-15
 BETA = 0.9
 BETA2 = 0.99
