@@ -5,8 +5,10 @@ import numpy as np
 from typing import Dict, Tuple
 import copy
 
-# SGD SIG 0.031 300 1e-15 0.9 0.99 / 24 24 24 (init 0.000001 loss 0.092) RMS
-LEARNING_RATE = 0.003
+# TANH 0.1431  1e-15 0.9 0.99 / 24 24 24 (xavier normalized init (seed 42) loss 0.054)
+# TANH 0.01  1e-15 0.9 0.99 / 24 24 24 (xavier normalized init (seed 42) loss 0.060) MOMENTUM
+
+LEARNING_RATE = 0.031
 EPOCHS = 3000
 EPSILON = 1e-15
 BETA = 0.9
@@ -32,17 +34,55 @@ def get_activation(activation):
     return ml.sigmoid_, ml.sigmoid_derivative
 
 
-def init(dimensions):
+def xavier_init(dimensions):
+    np.random.seed(42)
     parameters = {}
     layer_len = len(dimensions)
-    np.random.seed(1)
-    init_num = 0.3
     for layer in range(1, layer_len):
+        lower_bound = -(1.0 / np.sqrt(dimensions[layer - 1]))
+        upper_bound = 1.0 / np.sqrt(dimensions[layer - 1])
         parameters["slope_" + str(layer)] = np.random.uniform(
-            -init_num, init_num, (dimensions[layer], dimensions[layer - 1])
+            lower_bound, upper_bound, (dimensions[layer], dimensions[layer - 1])
         )
         parameters["intercept_" + str(layer)] = 0
     return parameters
+
+
+def xavier_normalized_init(dimensions):
+    np.random.seed(42)
+    parameters = {}
+    layer_len = len(dimensions)
+    for layer in range(1, layer_len):
+        lower_bound = -(6.0 / np.sqrt(dimensions[layer - 1] + dimensions[layer]))
+        upper_bound = 6.0 / np.sqrt(dimensions[layer - 1] + dimensions[layer])
+        parameters["slope_" + str(layer)] = np.random.uniform(
+            lower_bound, upper_bound, (dimensions[layer], dimensions[layer - 1])
+        )
+        parameters["intercept_" + str(layer)] = 0
+    return parameters
+
+
+def he_init(dimensions):
+    np.random.seed(42)
+    parameters = {}
+    layer_len = len(dimensions)
+    for layer in range(1, layer_len):
+        std = np.sqrt(2 / dimensions[layer_len - 1])
+        parameters["slope_" + str(layer)] = np.random.normal(
+            0, std, (dimensions[layer], dimensions[layer - 1])
+        )
+        parameters["intercept_" + str(layer)] = 0
+    return parameters
+
+
+def get_init_params(dimensions, init):
+    if init == "xavier":
+        return xavier_init(dimensions)
+    if init == "he":
+        return he_init(dimensions)
+    if init == "nxavier":
+        return xavier_normalized_init(dimensions)
+    return xavier_normalized_init(dimensions)
 
 
 def forward_propagation(X, parameters, activation_function):
@@ -71,7 +111,7 @@ def log_loss(A, y):
     )
 
 
-def back_propagation(activations, y, parameters, activation_derivative):
+def back_propagation(activations, y, parameters, actxavier_initivation_derivative):
     layer_len = len(parameters) // 2
     m = y.shape[1]
 
@@ -465,12 +505,13 @@ def train_model(
     optimizer,
     activation_function,
     activation_derivative,
+    init,
     early_stopping=False,
 ):
     dimensions = list(hidden_layer)
     dimensions.insert(0, X.shape[0])
     dimensions.append(y.shape[0])
-    parameters = init(dimensions)
+    parameters = get_init_params(dimensions, init)
     best_parameters = dict(parameters)
     layer_len = len(parameters) // 2
     best_loss = -1
@@ -653,6 +694,7 @@ if __name__ == "__main__":
         default=[24, 24, 24],
         type=int,
     )
+    parser.add_argument("-i", "--init", help="Initialization method")
     parser.add_argument("-b", "--batch-size", help="Batch size", type=int)
     parser.add_argument(
         "-cm",
@@ -696,6 +738,7 @@ if __name__ == "__main__":
         activation_function=activation,
         activation_derivative=activation_derivative,
         early_stopping=args.early_stopping,
+        init=args.init,
     )
     if args.confusion_matrix:
         display_predictions(df, y, parameters, validation_df, validation_y, activation)
